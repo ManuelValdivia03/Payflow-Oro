@@ -1,130 +1,148 @@
-COMISION_FIJA = 15.00
+"""MVP minimo de PayFlow - Guardian de suscripciones.
 
-CONCEPTOS_VALIDOS = ["Renta", "Luz", "Internet"]
+Este modulo concentra la logica de negocio necesaria para TAR04:
+presupuesto, ahorro/meta, suscripcion, pago de servicio, salud financiera
+y una funcion orquestadora final.
+"""
+
+CONCEPTOS_VALIDOS = {"Renta", "Luz", "Internet"}
+COMISION_SERVICIO = 5.0
 
 
-def pagar_concepto_fijo(saldo_actual, concepto, monto_pago):
-    """
-    Procesa el pago de un concepto fijo de PayFlow.
-
-    Reglas:
-    - Los conceptos válidos son Renta, Luz e Internet.
-    - Renta y Luz mantienen una comisión fija de $15.00.
-    - Internet no cobra comisión.
-    - Si el saldo no alcanza para monto + comisión, el pago se rechaza.
-    - Si el pago es exitoso, se descuenta el total del saldo.
-    """
-
-    if concepto not in CONCEPTOS_VALIDOS:
-        return {
-            "estado": "Rechazado",
-            "saldo_final": saldo_actual,
-            "mensaje": "Concepto no válido",
-            "comision": 0.00
-        }
-
-    if monto_pago <= 0:
-        return {
-            "estado": "Rechazado",
-            "saldo_final": saldo_actual,
-            "mensaje": "El monto debe ser mayor a cero",
-            "comision": 0.00
-        }
-
-    if concepto == "Internet":
-        comision = 0.00
-    else:
-        comision = COMISION_FIJA
-
-    total_a_cobrar = monto_pago + comision
-
-    if saldo_actual < total_a_cobrar:
-        return {
-            "estado": "Rechazado",
-            "saldo_final": saldo_actual,
-            "mensaje": "Saldo insuficiente",
-            "comision": comision
-        }
-
-    saldo_final = saldo_actual - total_a_cobrar
-
-    return {
-        "estado": "Exitoso",
-        "saldo_final": saldo_final,
-        "mensaje": "Pago realizado correctamente",
-        "comision": comision
-    }
-
-def clasificar_salud_financiera(saldo_actual, presupuesto_total):
-    """
-    Clasifica la salud financiera del usuario según su saldo disponible.
-
-    Reglas:
-    - Si el presupuesto total es menor o igual a cero, se rechaza.
-    - Si el saldo es cero o negativo, el estado es CRITICO.
-    - Si el saldo es menor al 10% del presupuesto, el estado es EN RIESGO.
-    - En cualquier otro caso, el estado es SALUDABLE.
-    """
-
-    if presupuesto_total <= 0:
+def configurar_presupuesto(presupuesto_mensual, ahorro_meta):
+    """Reserva el ahorro/meta y devuelve el saldo operativo inicial."""
+    if presupuesto_mensual <= 0 or ahorro_meta < 0:
         return {
             "estado": "RECHAZADO",
-            "mensaje": "El presupuesto total debe ser mayor a cero"
+            "saldo": 0.0,
+            "mensaje": "Presupuesto o ahorro invalido.",
         }
 
-    limite_riesgo = presupuesto_total * 0.10
-
-    if saldo_actual <= 0:
+    if presupuesto_mensual <= ahorro_meta:
         return {
-            "estado": "CRITICO",
-            "mensaje": "El saldo disponible es crítico"
+            "estado": "EJERCICIO_DEFICIT",
+            "saldo": 0.0,
+            "mensaje": "El presupuesto no cubre la meta de ahorro.",
         }
 
-    if saldo_actual < limite_riesgo:
+    saldo = presupuesto_mensual - ahorro_meta
+    return {
+        "estado": "EJERCICIO",
+        "saldo": float(saldo),
+        "mensaje": "Presupuesto configurado correctamente.",
+    }
+
+
+def pagar_concepto_fijo(saldo, concepto, monto):
+    """Procesa un pago de servicio basico con comision fija."""
+    if concepto not in CONCEPTOS_VALIDOS:
         return {
-            "estado": "EN RIESGO",
-            "mensaje": "El saldo es menor al 10% del presupuesto"
+            "estado": "RECHAZADA",
+            "saldo": float(saldo),
+            "mensaje": "Concepto no valido.",
+        }
+
+    if monto <= 0:
+        return {
+            "estado": "RECHAZADA",
+            "saldo": float(saldo),
+            "mensaje": "Monto invalido.",
+        }
+
+    total = monto + COMISION_SERVICIO
+    if saldo < total:
+        return {
+            "estado": "RECHAZADA",
+            "saldo": float(saldo),
+            "mensaje": "Saldo insuficiente para pagar el servicio.",
         }
 
     return {
-        "estado": "SALUDABLE",
-        "mensaje": "El saldo se mantiene estable"
+        "estado": "APROBADA",
+        "saldo": float(saldo - total),
+        "mensaje": "Pago de servicio aprobado.",
     }
 
-def procesar_suscripcion(saldo_actual, nombre_suscripcion, costo):
-    """
-    Procesa el pago automático de una suscripción digital.
 
-    Reglas:
-    - La suscripción debe tener nombre.
-    - El costo debe ser mayor a cero.
-    - Si hay saldo suficiente, queda PAGADA y descuenta el costo.
-    - Si no hay saldo suficiente, queda SUSPENDIDA y no descuenta saldo.
-    """
-
-    if nombre_suscripcion == "":
+def procesar_suscripcion(saldo, nombre, costo):
+    """Procesa el cobro de una suscripcion digital."""
+    if not nombre or not nombre.strip():
         return {
             "estado": "RECHAZADA",
-            "saldo_final": saldo_actual,
-            "mensaje": "La suscripción debe tener un nombre válido"
+            "saldo": float(saldo),
+            "mensaje": "Suscripcion sin nombre.",
         }
 
     if costo <= 0:
         return {
             "estado": "RECHAZADA",
-            "saldo_final": saldo_actual,
-            "mensaje": "El costo de la suscripción debe ser mayor a cero"
+            "saldo": float(saldo),
+            "mensaje": "Costo de suscripcion invalido.",
         }
 
-    if saldo_actual < costo:
+    if saldo < costo:
         return {
             "estado": "SUSPENDIDA",
-            "saldo_final": saldo_actual,
-            "mensaje": "Saldo insuficiente para pagar la suscripción"
+            "saldo": float(saldo),
+            "mensaje": "Suscripcion suspendida por saldo insuficiente.",
         }
 
     return {
         "estado": "PAGADA",
-        "saldo_final": saldo_actual - costo,
-        "mensaje": "Suscripción pagada correctamente"
+        "saldo": float(saldo - costo),
+        "mensaje": "Suscripcion pagada correctamente.",
+    }
+
+
+def clasificar_salud_financiera(saldo, presupuesto_mensual, pagos_prioritarios=0):
+    """Clasifica la salud financiera despues de las operaciones."""
+    if presupuesto_mensual <= 0 or saldo < 0:
+        return "RECHAZADO"
+
+    if saldo < pagos_prioritarios:
+        return "CRITICO"
+
+    if saldo < presupuesto_mensual * 0.10:
+        return "EN RIESGO"
+
+    return "SALUDABLE"
+
+
+def procesar_flujo_payflow(
+    presupuesto_mensual,
+    ahorro_meta,
+    suscripcion_nombre,
+    suscripcion_costo,
+    servicio_nombre,
+    servicio_monto,
+    pagos_prioritarios=0,
+):
+    """Funcion orquestadora final del MVP minimo de PayFlow."""
+    presupuesto = configurar_presupuesto(presupuesto_mensual, ahorro_meta)
+    if presupuesto["estado"] != "EJERCICIO":
+        return _respuesta_final(presupuesto, None, None, "CRITICO")
+
+    suscripcion = procesar_suscripcion(
+        presupuesto["saldo"], suscripcion_nombre, suscripcion_costo
+    )
+    servicio = pagar_concepto_fijo(
+        suscripcion["saldo"], servicio_nombre, servicio_monto
+    )
+    salud = clasificar_salud_financiera(
+        servicio["saldo"], presupuesto_mensual, pagos_prioritarios
+    )
+
+    return _respuesta_final(presupuesto, suscripcion, servicio, salud)
+
+
+def _respuesta_final(presupuesto, suscripcion, servicio, salud):
+    """Agrupa los resultados del flujo para facilitar pruebas y salida en consola."""
+    ultimo_resultado = servicio or suscripcion or presupuesto
+
+    return {
+        "presupuesto": presupuesto,
+        "suscripcion": suscripcion,
+        "servicio": servicio,
+        "saldo_final": float(ultimo_resultado["saldo"]),
+        "salud_financiera": salud,
     }

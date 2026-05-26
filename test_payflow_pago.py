@@ -1,186 +1,119 @@
+import pytest
+
 from payflow_pago import (
+    configurar_presupuesto,
     pagar_concepto_fijo,
+    procesar_suscripcion,
     clasificar_salud_financiera,
-    procesar_suscripcion
+    procesar_flujo_payflow,
 )
 
-def test_pago_renta_con_comision_exitoso():
-    resultado = pagar_concepto_fijo(
-        saldo_actual=2000,
-        concepto="Renta",
-        monto_pago=1000
-    )
 
-    assert resultado["estado"] == "Exitoso"
-    assert resultado["saldo_final"] == 985
-    assert resultado["comision"] == 15
+def test_configurar_presupuesto_valido_reserva_ahorro():
+    resultado = configurar_presupuesto(5000, 1000)
+    assert resultado["estado"] == "EJERCICIO"
+    assert resultado["saldo"] == 4000
 
 
-def test_pago_luz_con_comision_exitoso():
-    resultado = pagar_concepto_fijo(
-        saldo_actual=500,
-        concepto="Luz",
-        monto_pago=300
-    )
-
-    assert resultado["estado"] == "Exitoso"
-    assert resultado["saldo_final"] == 185
-    assert resultado["comision"] == 15
-
-
-def test_pago_rechazado_por_saldo_insuficiente():
-    resultado = pagar_concepto_fijo(
-        saldo_actual=1000,
-        concepto="Renta",
-        monto_pago=1000
-    )
-
-    assert resultado["estado"] == "Rechazado"
-    assert resultado["saldo_final"] == 1000
-    assert resultado["mensaje"] == "Saldo insuficiente"
-
-
-def test_pago_rechazado_por_concepto_no_valido():
-    resultado = pagar_concepto_fijo(
-        saldo_actual=1000,
-        concepto="Agua",
-        monto_pago=300
-    )
-
-    assert resultado["estado"] == "Rechazado"
-    assert resultado["saldo_final"] == 1000
-    assert resultado["mensaje"] == "Concepto no válido"
-
-
-def test_pago_rechazado_por_monto_negativo():
-    resultado = pagar_concepto_fijo(
-        saldo_actual=1000,
-        concepto="Luz",
-        monto_pago=-100
-    )
-
-    assert resultado["estado"] == "Rechazado"
-    assert resultado["saldo_final"] == 1000
-    assert resultado["mensaje"] == "El monto debe ser mayor a cero"
-
-def test_pago_internet_sin_comision():
-    resultado = pagar_concepto_fijo(
-        saldo_actual=1000,
-        concepto="Internet",
-        monto_pago=1000
-    )
-
-    assert resultado["estado"] == "Exitoso"
-    assert resultado["saldo_final"] == 0
-    assert resultado["comision"] == 0
-
-def test_salud_financiera_saludable():
-    resultado = clasificar_salud_financiera(
-        saldo_actual=1500,
-        presupuesto_total=3000
-    )
-
-    assert resultado["estado"] == "SALUDABLE"
-    assert resultado["mensaje"] == "El saldo se mantiene estable"
-
-
-def test_salud_financiera_en_riesgo():
-    resultado = clasificar_salud_financiera(
-        saldo_actual=200,
-        presupuesto_total=3000
-    )
-
-    assert resultado["estado"] == "EN RIESGO"
-    assert resultado["mensaje"] == "El saldo es menor al 10% del presupuesto"
-
-
-def test_salud_financiera_critico():
-    resultado = clasificar_salud_financiera(
-        saldo_actual=0,
-        presupuesto_total=3000
-    )
-
-    assert resultado["estado"] == "CRITICO"
-    assert resultado["mensaje"] == "El saldo disponible es crítico"
-
-
-def test_salud_financiera_rechaza_presupuesto_invalido():
-    resultado = clasificar_salud_financiera(
-        saldo_actual=100,
-        presupuesto_total=0
-    )
-
+def test_configurar_presupuesto_rechaza_valores_invalidos():
+    resultado = configurar_presupuesto(0, 100)
     assert resultado["estado"] == "RECHAZADO"
-    assert resultado["mensaje"] == "El presupuesto total debe ser mayor a cero"
 
-def test_suscripcion_pagada_con_saldo_suficiente():
-    resultado = procesar_suscripcion(
-        saldo_actual=500,
-        nombre_suscripcion="Netflix",
-        costo=199
-    )
 
+def test_configurar_presupuesto_detecta_deficit_por_ahorro():
+    resultado = configurar_presupuesto(1000, 1000)
+    assert resultado["estado"] == "EJERCICIO_DEFICIT"
+    assert resultado["saldo"] == 0
+
+
+def test_procesar_suscripcion_pagada_con_saldo_suficiente():
+    resultado = procesar_suscripcion(500, "Netflix", 199)
     assert resultado["estado"] == "PAGADA"
-    assert resultado["saldo_final"] == 301
-    assert resultado["mensaje"] == "Suscripción pagada correctamente"
+    assert resultado["saldo"] == 301
 
 
-def test_suscripcion_rechazada_por_saldo_insuficiente():
-    resultado = procesar_suscripcion(
-        saldo_actual=100,
-        nombre_suscripcion="Spotify",
-        costo=129
-    )
-
+def test_procesar_suscripcion_suspendida_por_saldo_insuficiente():
+    resultado = procesar_suscripcion(100, "Spotify", 129)
     assert resultado["estado"] == "SUSPENDIDA"
-    assert resultado["saldo_final"] == 100
-    assert resultado["mensaje"] == "Saldo insuficiente para pagar la suscripción"
+    assert resultado["saldo"] == 100
 
 
-def test_suscripcion_rechazada_por_costo_invalido():
-    resultado = procesar_suscripcion(
-        saldo_actual=500,
-        nombre_suscripcion="Netflix",
-        costo=0
-    )
-
+def test_procesar_suscripcion_rechaza_nombre_vacio():
+    resultado = procesar_suscripcion(500, "", 199)
     assert resultado["estado"] == "RECHAZADA"
-    assert resultado["saldo_final"] == 500
-    assert resultado["mensaje"] == "El costo de la suscripción debe ser mayor a cero"
 
 
-def test_suscripcion_rechazada_por_nombre_vacio():
-    resultado = procesar_suscripcion(
-        saldo_actual=500,
-        nombre_suscripcion="",
-        costo=199
-    )
-
+def test_procesar_suscripcion_rechaza_costo_invalido():
+    resultado = procesar_suscripcion(500, "Netflix", 0)
     assert resultado["estado"] == "RECHAZADA"
-    assert resultado["saldo_final"] == 500
-    assert resultado["mensaje"] == "La suscripción debe tener un nombre válido"
 
-def test_flujo_e2e_payflow_guardian():
-    saldo = 1000
 
-    suscripcion = procesar_suscripcion(
-        saldo_actual=saldo,
-        nombre_suscripcion="Netflix",
-        costo=199
+def test_pagar_concepto_fijo_aprueba_luz_con_comision():
+    resultado = pagar_concepto_fijo(500, "Luz", 300)
+    assert resultado["estado"] == "APROBADA"
+    assert resultado["saldo"] == 195
+
+
+def test_pagar_concepto_fijo_rechaza_concepto_no_valido():
+    resultado = pagar_concepto_fijo(500, "Gasolina", 100)
+    assert resultado["estado"] == "RECHAZADA"
+
+
+def test_pagar_concepto_fijo_rechaza_monto_invalido():
+    resultado = pagar_concepto_fijo(500, "Luz", -1)
+    assert resultado["estado"] == "RECHAZADA"
+
+
+def test_pagar_concepto_fijo_rechaza_saldo_insuficiente():
+    resultado = pagar_concepto_fijo(100, "Internet", 150)
+    assert resultado["estado"] == "RECHAZADA"
+    assert resultado["saldo"] == 100
+
+
+def test_clasificar_salud_financiera_saludable():
+    assert clasificar_salud_financiera(1000, 5000) == "SALUDABLE"
+
+
+def test_clasificar_salud_financiera_en_riesgo():
+    assert clasificar_salud_financiera(300, 5000) == "EN RIESGO"
+
+
+def test_clasificar_salud_financiera_critico_por_pagos_prioritarios():
+    assert clasificar_salud_financiera(200, 5000, pagos_prioritarios=300) == "CRITICO"
+
+
+def test_clasificar_salud_financiera_rechaza_presupuesto_invalido():
+    assert clasificar_salud_financiera(200, 0) == "RECHAZADO"
+
+
+def test_flujo_e2e_payflow_guardian_exitoso():
+    resultado = procesar_flujo_payflow(
+        presupuesto_mensual=5000,
+        ahorro_meta=1000,
+        suscripcion_nombre="Netflix",
+        suscripcion_costo=199,
+        servicio_nombre="Luz",
+        servicio_monto=300,
     )
 
-    pago_luz = pagar_concepto_fijo(
-        saldo_actual=suscripcion["saldo_final"],
-        concepto="Luz",
-        monto_pago=300
+    assert resultado["presupuesto"]["estado"] == "EJERCICIO"
+    assert resultado["suscripcion"]["estado"] == "PAGADA"
+    assert resultado["servicio"]["estado"] == "APROBADA"
+    assert resultado["saldo_final"] == 3496
+    assert resultado["salud_financiera"] == "SALUDABLE"
+
+
+def test_flujo_e2e_payflow_detiene_por_deficit_de_ahorro():
+    resultado = procesar_flujo_payflow(
+        presupuesto_mensual=1000,
+        ahorro_meta=1200,
+        suscripcion_nombre="Netflix",
+        suscripcion_costo=199,
+        servicio_nombre="Luz",
+        servicio_monto=300,
     )
 
-    salud = clasificar_salud_financiera(
-        saldo_actual=pago_luz["saldo_final"],
-        presupuesto_total=1000
-    )
-
-    assert suscripcion["estado"] == "PAGADA"
-    assert pago_luz["estado"] == "Exitoso"
-    assert pago_luz["saldo_final"] == 486
-    assert salud["estado"] == "SALUDABLE"
+    assert resultado["presupuesto"]["estado"] == "EJERCICIO_DEFICIT"
+    assert resultado["suscripcion"] is None
+    assert resultado["servicio"] is None
+    assert resultado["salud_financiera"] == "CRITICO"
